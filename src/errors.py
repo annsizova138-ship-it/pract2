@@ -11,3 +11,7 @@ class ConfigError(DepGraphError):
 
 class RepoError(DepGraphError):
     """Репозиторий недоступен или его данные нельзя разобрать."""
+
+
+class GraphError(DepGraphError):
+    """Граф зависимостей построить нельзя."""

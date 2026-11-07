@@ -1,9 +1,11 @@
 """Точка входа: граф зависимостей пакетов (формат apt)."""
 import sys
 
-from apt_repo import find_dependencies, load_apt_repository
-from config import MODE_TEST, parse_args
-from errors import ConfigError, DepGraphError, RepoError
+from config import parse_args
+from errors import ConfigError, DepGraphError
+from graph import build_graph, find_cycles
+from render import format_graph
+from repository import load_repository
 
 EXIT_OK = 0
 EXIT_ERROR = 1
@@ -11,17 +13,13 @@ EXIT_USAGE = 2
 
 
 def run(config):
-    """Выполняет работу этапа 2: выводит прямые зависимости пакета."""
-    if config.repo_mode == MODE_TEST:
-        raise RepoError("тестовый режим появится на следующем этапе")
-    print(f"Загрузка индекса: {config.repo}", file=sys.stderr)
-    repo = load_apt_repository(config.repo)
-    deps = find_dependencies(repo, config.package)
-    print(f"Прямые зависимости пакета {config.package}:")
-    for dep in deps:
-        print(f"  {dep}")
-    if not deps:
-        print("  (нет)")
+    """Выполняет работу этапа 3: строит и выводит граф зависимостей."""
+    print(f"Источник: {config.repo}", file=sys.stderr)
+    repo = load_repository(config)
+    graph = build_graph(
+        repo, config.package, config.max_depth, config.filter_substring)
+    for line in format_graph(graph, find_cycles(graph)):
+        print(line)
 
 
 def main(argv=None):

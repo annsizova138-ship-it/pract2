@@ -86,19 +86,17 @@ class NetworkTests(unittest.TestCase):
         with self.assertRaises(RepoError):
             download("http://127.0.0.1:9/Packages")
 
-    def test_main_prints_dependencies(self):
-        """main выводит прямые зависимости пакета."""
+    def test_main_url_mode(self):
+        """main читает индекс по URL и строит граф."""
         body = gzip.compress(SAMPLE_INDEX.encode("utf-8"))
         with serve(body) as base:
             out = io.StringIO()
             with contextlib.redirect_stdout(out), \
                     contextlib.redirect_stderr(io.StringIO()):
-                code = main(["--package", "curl",
+                code = main(["--package", "curl", "--max-depth", "1",
                              "--repo", base + "/Packages.gz"])
         self.assertEqual(code, EXIT_OK)
-        self.assertEqual(
-            out.getvalue().split("\n")[1:4],
-            ["  libc6", "  libcurl4", "  zlib1g"])
+        self.assertIn("  curl -> libc6, libcurl4, zlib1g\n", out.getvalue())
 
     def test_main_unknown_package(self):
         """Неизвестный пакет: код ошибки 1."""
