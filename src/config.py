@@ -152,16 +152,3 @@ def parse_args(argv=None):
         package=args.package, repo=args.repo, repo_mode=mode,
         ascii_tree=args.ascii_tree, max_depth=parse_depth(args.max_depth),
         filter_substring=args.filter)
-
-
-def format_config(config):
-    """Возвращает строки 'ключ: значение' для всех параметров."""
-    pairs = [
-        ("package", config.package),
-        ("repo", config.repo),
-        ("repo-mode", config.repo_mode),
-        ("ascii-tree", str(config.ascii_tree).lower()),
-        ("max-depth", config.max_depth),
-        ("filter", config.filter_substring or '""'),
-    ]
-    return [f"{key}: {value}" for key, value in pairs]

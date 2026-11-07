@@ -4,16 +4,15 @@
 
 Инструмент командной строки для анализа и визуализации графа зависимостей
 пакетов менеджера пакетов apt (Ubuntu). Готовые менеджеры пакетов и
-библиотеки для получения зависимостей не используются: данные берутся из
-индекса репозитория и разбираются самостоятельно.
+библиотеки для получения зависимостей не используются: индекс репозитория
+скачивается и разбирается самостоятельно (стандартные модули `urllib`,
+`gzip`, `lzma`).
 
-Выполнен **этап 1 - минимальный прототип с конфигурацией**: приложение
-принимает параметры командной строки, проверяет их и при запуске выводит
-все заданные значения в формате «ключ: значение».
+Выполнены **этап 1** (параметры и их проверка) и **этап 2 - сбор данных**:
+приложение скачивает индекс пакетов репозитория Ubuntu и выводит прямые
+зависимости заданного пакета.
 
 ## 2. Описание всех функций и настроек
-
-Источник настроек - только параметры командной строки.
 
 | Параметр | Описание | По умолчанию |
 |---|---|---|
@@ -40,6 +39,27 @@
 пакет не найден, граф или изображение построить не удалось), `2` - ошибка
 параметров командной строки.
 
+**Формат данных apt.** Репозиторий Ubuntu содержит текстовый индекс пакетов
+`Packages` (обычно сжатый: `Packages.gz` или `Packages.xz`). Адрес в
+параметре `--repo` указывает прямо на этот файл, например
+`http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz`. Сжатие (gzip, xz или его отсутствие) определяется
+автоматически по содержимому. Запись о пакете выглядит так:
+
+```
+Package: curl
+Depends: libc6 (>= 2.34), libcurl4t64 (= 8.5.0-2ubuntu10), zlib1g (>= 1:1.1.4)
+```
+
+**Что считается прямой зависимостью.** Имена пакетов из полей `Depends` и
+`Pre-Depends` (`Recommends` и `Suggests` необязательны и не учитываются).
+Версии (`(>= 2.34)`) и архитектуры (`:any`) отбрасываются. Если указаны
+альтернативы (`a | b`), берётся первая. Если пакета нет в индексе (например,
+виртуальный), он считается пакетом без зависимостей.
+
+**Ошибки работы** (код 1): репозиторий недоступен или отвечает ошибкой,
+архив повреждён, пакет не найден в индексе. Режим `--repo-mode test`
+появится на этапе 3.
+
 ## 3. Команды для сборки проекта и запуска тестов
 
 Сборка не требуется. Нужен Python 3 (разработано на версии 3.10); сторонние
@@ -55,7 +75,7 @@ scripts\run_tests.bat
 PYTHONPATH=src python3 -m unittest discover tests
 ```
 
-Запуск приложения (из корня репозитория):
+Запуск приложения:
 
 ```
 python src/main.py --package curl --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz
@@ -63,45 +83,38 @@ python src/main.py --package curl --repo http://archive.ubuntu.com/ubuntu/dists/
 
 ## 4. Примеры использования
 
-Запуск с параметрами (все значения выводятся при старте):
+Прямые зависимости пакета `curl`:
 
 ```
-python src/main.py --package curl --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz --max-depth 5 --filter lib
+python src/main.py --package curl --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz
 ```
 
 ```
-package: curl
-repo: http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz
-repo-mode: url
-ascii-tree: false
-max-depth: 5
-filter: lib
+Прямые зависимости пакета curl:
+  libc6
+  libcurl4t64
+  zlib1g
 ```
 
-Обработка ошибок (по одному запуску для каждого параметра):
+Прямые зависимости пакета `nano`:
 
 ```
-python src/main.py --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz
-Ошибка параметров: не задано имя пакета (--package)   (код 2)
+python src/main.py --package nano --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz
+```
 
-python src/main.py --package Curl --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz
-Ошибка параметров: недопустимое имя пакета 'Curl' (нужны: строчные латинские буквы, цифры, + . -)   (код 2)
+```
+Прямые зависимости пакета nano:
+  libc6
+  libncursesw6
+  libtinfo6
+```
 
-python src/main.py --package curl --repo ftp://example.org/Packages
-Ошибка параметров: некорректный URL репозитория: ftp://example.org/Packages   (код 2)
+Ошибки (пакет отсутствует в индексе, сервер недоступен):
 
-python src/main.py --package curl --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz --repo-mode x
-Ошибка параметров: неизвестный режим 'x', допустимо: url или test   (код 2)
+```
+python src/main.py --package nothing-here --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz
+Ошибка: пакет 'nothing-here' не найден в репозитории
 
-python src/main.py --package curl --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz --max-depth abc
-Ошибка параметров: глубина должна быть целым числом, получено 'abc'   (код 2)
-
-python src/main.py --package curl --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz --max-depth 0
-Ошибка параметров: глубина должна быть не меньше 1   (код 2)
-
-python src/main.py --package curl --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz --filter "a b"
-Ошибка параметров: подстрока фильтра не должна содержать пробелов   (код 2)
-
-python src/main.py --package A --repo no_such.txt --repo-mode test
-Ошибка параметров: файл тестового репозитория не найден: no_such.txt   (код 2)
+python src/main.py --package curl --repo http://localhost:9/Packages.gz
+Ошибка: не удалось скачать http://localhost:9/Packages.gz: <текст ошибки системы>
 ```

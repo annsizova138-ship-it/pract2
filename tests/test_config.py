@@ -4,9 +4,9 @@ import io
 import os
 import unittest
 
-from config import Config, build_parser, format_config, parse_args
+from config import Config, build_parser, parse_args
 from errors import ConfigError
-from main import EXIT_OK, EXIT_USAGE, main
+from main import EXIT_USAGE, main
 
 THIS_FILE = os.path.abspath(__file__)
 URL = "http://archive.ubuntu.com/ubuntu/dists/noble/main/Packages.gz"
@@ -69,13 +69,6 @@ class ParseArgsTests(unittest.TestCase):
                 with self.assertRaises(ConfigError):
                     parse_args(argv)
 
-    def test_format_config(self):
-        """Параметры выводятся как 'ключ: значение'."""
-        config = Config("curl", URL, "url", True, 4, "")
-        self.assertEqual(format_config(config), [
-            "package: curl", f"repo: {URL}", "repo-mode: url",
-            "ascii-tree: true", "max-depth: 4", 'filter: ""'])
-
 
 class RussianTextTests(unittest.TestCase):
     """Проверки русских сообщений argparse."""
@@ -101,16 +94,7 @@ class RussianTextTests(unittest.TestCase):
 
 
 class MainTests(unittest.TestCase):
-    """Проверки точки входа."""
-
-    def test_prints_params(self):
-        """При запуске выводятся все параметры."""
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            code = main(["--package", "curl", "--repo", URL])
-        self.assertEqual(code, EXIT_OK)
-        self.assertIn("package: curl", out.getvalue())
-        self.assertIn("max-depth: 3", out.getvalue())
+    """Проверки обработки ошибок параметров в main."""
 
     def test_error_exit_code(self):
         """Ошибка параметров: сообщение в stderr и код 2."""

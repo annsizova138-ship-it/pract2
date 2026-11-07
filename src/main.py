@@ -1,8 +1,9 @@
 """Точка входа: граф зависимостей пакетов (формат apt)."""
 import sys
 
-from config import format_config, parse_args
-from errors import ConfigError, DepGraphError
+from apt_repo import find_dependencies, load_apt_repository
+from config import MODE_TEST, parse_args
+from errors import ConfigError, DepGraphError, RepoError
 
 EXIT_OK = 0
 EXIT_ERROR = 1
@@ -10,9 +11,17 @@ EXIT_USAGE = 2
 
 
 def run(config):
-    """Выполняет работу этапа 1: выводит все параметры."""
-    for line in format_config(config):
-        print(line)
+    """Выполняет работу этапа 2: выводит прямые зависимости пакета."""
+    if config.repo_mode == MODE_TEST:
+        raise RepoError("тестовый режим появится на следующем этапе")
+    print(f"Загрузка индекса: {config.repo}", file=sys.stderr)
+    repo = load_apt_repository(config.repo)
+    deps = find_dependencies(repo, config.package)
+    print(f"Прямые зависимости пакета {config.package}:")
+    for dep in deps:
+        print(f"  {dep}")
+    if not deps:
+        print("  (нет)")
 
 
 def main(argv=None):

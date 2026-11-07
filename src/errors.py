@@ -7,3 +7,7 @@ class DepGraphError(Exception):
 
 class ConfigError(DepGraphError):
     """Неверное значение параметра командной строки."""
+
+
+class RepoError(DepGraphError):
+    """Репозиторий недоступен или его данные нельзя разобрать."""
