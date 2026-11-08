@@ -30,6 +30,15 @@ class ParseArgsTests(unittest.TestCase):
         self.assertEqual(config.max_depth, 5)
         self.assertEqual(config.filter_substring, "lib")
 
+    def test_image_params(self):
+        """Параметры изображения читаются."""
+        config = parse_args([
+            "--package", "curl", "--repo", URL, "--image", "g.svg",
+            "--no-show", "--load-order"])
+        self.assertEqual(config.image, "g.svg")
+        self.assertTrue(config.no_show)
+        self.assertTrue(config.load_order)
+
     def test_test_mode(self):
         """В режиме test путь - существующий файл, имя - заглавные буквы."""
         config = parse_args([
@@ -61,6 +70,11 @@ class ParseArgsTests(unittest.TestCase):
                 "--package", "curl", "--repo", URL, "--max-depth", "-2"],
             "фильтр с пробелом": [
                 "--package", "curl", "--repo", URL, "--filter", "a b"],
+            "изображение не png/svg": [
+                "--package", "curl", "--repo", URL, "--image", "g.jpg"],
+            "нет папки для изображения": [
+                "--package", "curl", "--repo", URL,
+                "--image", "no_such_dir/g.png"],
             "неизвестная опция": [
                 "--package", "curl", "--repo", URL, "--bogus"],
         }

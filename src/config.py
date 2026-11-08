@@ -14,6 +14,7 @@ DEFAULT_MODE = MODE_URL
 DEFAULT_MAX_DEPTH = 3
 MIN_DEPTH = 1
 URL_SCHEMES = ("http", "https")
+IMAGE_EXTENSIONS = (".png", ".svg")
 APT_NAME = re.compile(r"[a-z0-9][a-z0-9+.\-]*")
 TEST_NAME = re.compile(r"[A-Z]+")
 HELP_TITLES = {
@@ -34,6 +35,8 @@ class Config:
     max_depth: int
     filter_substring: str
     load_order: bool = False
+    image: str = ""
+    no_show: bool = False
 
 
 def translate_error(message):
@@ -90,6 +93,12 @@ def build_parser():
     parser.add_argument(
         "--load-order", action="store_true",
         help="вывести порядок загрузки зависимостей пакета")
+    parser.add_argument(
+        "--image", default="", metavar="ФАЙЛ",
+        help="куда сохранить изображение (.png или .svg)")
+    parser.add_argument(
+        "--no-show", action="store_true",
+        help="не открывать изображение в просмотрщике")
     return parser
 
 
@@ -145,6 +154,17 @@ def check_filter(substring):
         raise ConfigError("подстрока фильтра не должна содержать пробелов")
 
 
+def check_image(path):
+    """Проверяет путь для изображения: расширение и существующая папка."""
+    if not path:
+        return
+    if os.path.splitext(path)[1].lower() not in IMAGE_EXTENSIONS:
+        raise ConfigError("изображение должно быть в формате .png или .svg")
+    folder = os.path.dirname(path) or "."
+    if not os.path.isdir(folder):
+        raise ConfigError(f"папка для изображения не найдена: {folder}")
+
+
 def parse_args(argv=None):
     """Разбирает и проверяет параметры; ошибки - ConfigError."""
     args = build_parser().parse_args(argv)
@@ -152,7 +172,9 @@ def parse_args(argv=None):
     check_package(args.package, mode)
     check_repo(args.repo, mode)
     check_filter(args.filter)
+    check_image(args.image)
     return Config(
         package=args.package, repo=args.repo, repo_mode=mode,
         ascii_tree=args.ascii_tree, max_depth=parse_depth(args.max_depth),
-        filter_substring=args.filter, load_order=args.load_order)
+        filter_substring=args.filter, load_order=args.load_order,
+        image=args.image, no_show=args.no_show)

@@ -94,9 +94,10 @@ class NetworkTests(unittest.TestCase):
             with contextlib.redirect_stdout(out), \
                     contextlib.redirect_stderr(io.StringIO()):
                 code = main(["--package", "curl", "--max-depth", "1",
-                             "--repo", base + "/Packages.gz"])
+                             "--load-order", "--repo", base + "/Packages.gz"])
         self.assertEqual(code, EXIT_OK)
-        self.assertIn("  curl -> libc6, libcurl4, zlib1g\n", out.getvalue())
+        self.assertIn("  1. libc6\n  2. libcurl4\n  3. zlib1g\n  4. curl\n",
+                      out.getvalue())
 
     def test_main_unknown_package(self):
         """Неизвестный пакет: код ошибки 1."""

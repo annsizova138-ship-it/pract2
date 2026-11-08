@@ -6,10 +6,12 @@
 пакетов менеджера пакетов apt (Ubuntu). Готовые менеджеры пакетов и
 библиотеки для получения зависимостей не используются: индекс репозитория
 скачивается и разбирается самостоятельно (`urllib`, `gzip`, `lzma`).
+Graphviz используется только для рисования готового графа.
 
-Выполнены этапы 1-3 (параметры, сбор данных, граф) и **этап 4 -
-дополнительные операции**: вывод порядка загрузки зависимостей и сравнение
-его с настоящим менеджером пакетов.
+Реализованы все этапы: параметры командной строки, сбор данных из
+репозитория Ubuntu, граф с транзитивными зависимостями (глубина, фильтр,
+циклы, тестовый режим), порядок загрузки, визуализация (Graphviz, изображение,
+ASCII-дерево).
 
 ## 2. Описание всех функций и настроек
 
@@ -18,10 +20,12 @@
 | `--package ИМЯ` | имя анализируемого пакета (обязательный). В режиме `url` - как в apt: строчные латинские буквы, цифры, `+ . -`; в режиме `test` - большие латинские буквы | - |
 | `--repo ПУТЬ` | URL репозитория (`http://` или `https://`) или путь к файлу тестового репозитория (обязательный) | - |
 | `--repo-mode РЕЖИМ` | `url` - настоящий репозиторий, `test` - файл тестового репозитория | `url` |
-| `--ascii-tree` | флаг: вывести зависимости в виде ASCII-дерева (появится на этапе 5) | выключен |
+| `--ascii-tree` | флаг: вывести зависимости в виде ASCII-дерева | выключен |
 | `--max-depth N` | максимальная глубина анализа, целое число не меньше 1 | 3 |
 | `--filter ПОДСТРОКА` | не учитывать пакеты, в имени которых есть подстрока (без пробелов) | не задана |
 | `--load-order` | вывести порядок загрузки зависимостей вместо графа | выключен |
+| `--image ФАЙЛ` | куда сохранить изображение графа (`.png` или `.svg`) | временная папка, `dep-graph-<пакет>.png` |
+| `--no-show` | флаг: не открывать изображение в программе просмотра | выключен |
 
 Все параметры проверяются до начала работы. Ошибки выводятся в stderr в
 виде `Ошибка параметров: ...`, программа завершается с кодом 2:
@@ -34,6 +38,7 @@
 - `--max-depth` - не целое число или меньше 1;
 - `--filter` содержит пробелы;
 - неизвестная опция.
+- `--image` с расширением не `.png` / `.svg` или с несуществующей папкой.
 
 Коды завершения: `0` - успех, `1` - ошибка работы (репозиторий недоступен,
 пакет не найден, граф или изображение построить не удалось), `2` - ошибка
@@ -73,12 +78,30 @@ C: D
 D:
 ```
 
-**Порядок загрузки** (`--load-order`). Порядок, в котором нужно установить
-пакеты, чтобы каждая зависимость оказалась раньше пакета, которому она
-нужна. Используется обход графа в глубину: пакет записывается после всех
-своих зависимостей, корень всегда последний. Глубина и фильтр действуют так
-же, как при построении графа. Для цикла верного порядка не существует:
-связь, замыкающая цикл, пропускается, а цикл выводится отдельно.
+**Порядок загрузки** (`--load-order`). Каждая зависимость оказывается раньше
+пакета, которому она нужна; используется обход в глубину, корень последний.
+Связь, замыкающая цикл, пропускается, цикл выводится отдельно.
+
+**Визуализация.**
+
+- *Graphviz.* Текстовое описание графа на языке DOT выводится в stdout.
+  Корень закрашен, рёбра циклов красные, пакеты на границе глубины (их
+  зависимости не раскрывались) нарисованы пунктиром.
+- *Изображение.* Программа `dot` (Graphviz) строит PNG или SVG, затем
+  изображение открывается в программе просмотра по умолчанию. Путь задаётся
+  `--image`, иначе файл создаётся во временной папке; `--no-show` отключает
+  открытие. Graphviz нужен только для рисования; если `dot` не найден,
+  выводится ошибка, а текст DOT уже напечатан и его можно подать в Graphviz
+  самостоятельно. Изображения в репозиторий не сохраняются.
+- *ASCII-дерево* (`--ascii-tree`). `|--` и `` `-- `` - ветви. Пометка
+  `(цикл)` - пакет уже встречался выше по этой ветке; `(повтор)` -
+  пакет с зависимостями уже раскрыт в другой ветке, его зависимости не
+  повторяются; пакеты без зависимостей при повторе пишутся без пометки.
+
+**Что выводится.** По умолчанию - текст DOT в stdout и изображение; с
+`--ascii-tree` перед DOT выводится дерево; с `--load-order` - только порядок
+загрузки. Служебные сообщения (источник, циклы, путь к изображению) идут в
+stderr.
 
 Файлы проекта:
 
@@ -105,20 +128,225 @@ scripts\run_tests.bat
 PYTHONPATH=src python3 -m unittest discover tests
 ```
 
+Для изображений нужен Graphviz (команда `dot` должна быть в PATH,
+проверка: `dot -V`). Тесты изображений пропускаются, если Graphviz нет.
+
 Запуск приложения:
 
 ```
-python src/main.py --package wget --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz --max-depth 20 --load-order
-python src/main.py --package A --repo examples/diamond.txt --repo-mode test --load-order
+python src/main.py --package wget --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz --max-depth 3 --ascii-tree
+python src/main.py --package A --repo examples/cycle.txt --repo-mode test --image graph.png
 ```
 
-Демонстрации (Windows): `scripts\demo_load_order.bat` (тестовые
-репозитории), `scripts\demo_real_load_order.bat` (настоящий репозиторий,
-нужен интернет), а также демонстрации этапа 3.
+Демонстрации (Windows): `scripts\demo_test_repo.bat` (дерево и DOT для
+тестовых репозиториев), `scripts\demo_images.bat` (картинки),
+`scripts\demo_real_repo.bat` (три настоящих пакета, нужен интернет),
+а также демонстрации этапов 3-4.
 
 ## 4. Примеры использования
 
-Ромб: общий пакет `D` раньше `B` и `C`, корень последний:
+Цикл (красные рёбра в изображении, пометка `(цикл)` в дереве):
+
+```
+python src/main.py --package A --repo examples/cycle.txt --repo-mode test --ascii-tree
+```
+
+```
+A
+`-- B
+    `-- C
+        |-- A (цикл)
+        `-- D
+digraph "A" {
+  rankdir=LR;
+  node [shape=box];
+  "A" [style=filled, fillcolor=lightblue];
+  "D" [style=dashed];
+  "A" -> "B" [color=red];
+  "B" -> "C" [color=red];
+  "C" -> "A" [color=red];
+  "C" -> "D";
+}
+```
+
+Ограничение глубины (пакеты на границе глубины - пунктиром):
+
+```
+python src/main.py --package A --repo examples/wide.txt --repo-mode test --max-depth 2 --ascii-tree
+```
+
+```
+A
+|-- B
+|   |-- E
+|   `-- F
+|-- C
+|   `-- G
+`-- D
+digraph "A" {
+  rankdir=LR;
+  node [shape=box];
+  "A" [style=filled, fillcolor=lightblue];
+  "E" [style=dashed];
+  "F" [style=dashed];
+  "G" [style=dashed];
+  "A" -> "B";
+  "A" -> "C";
+  "A" -> "D";
+  "B" -> "E";
+  "B" -> "F";
+  "C" -> "G";
+}
+```
+
+### Три настоящих пакета (индекс `noble/main`)
+
+Пакет `nano`:
+
+```
+python src/main.py --package nano --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz --max-depth 3 --ascii-tree
+```
+
+```
+nano
+|-- libc6
+|   `-- libgcc-s1
+|       |-- gcc-14-base
+|       `-- libc6 (цикл)
+|-- libncursesw6
+|   |-- libtinfo6
+|   |   `-- libc6 (повтор)
+|   `-- libc6 (повтор)
+`-- libtinfo6 (повтор)
+digraph "nano" {
+  rankdir=LR;
+  node [shape=box];
+  "nano" [style=filled, fillcolor=lightblue];
+  "gcc-14-base" [style=dashed];
+  "nano" -> "libc6";
+  "nano" -> "libncursesw6";
+  "nano" -> "libtinfo6";
+  "libc6" -> "libgcc-s1" [color=red];
+  "libncursesw6" -> "libtinfo6";
+  "libncursesw6" -> "libc6";
+  "libtinfo6" -> "libc6";
+  "libgcc-s1" -> "gcc-14-base";
+  "libgcc-s1" -> "libc6" [color=red];
+}
+```
+
+Пакет `wget`:
+
+```
+python src/main.py --package wget --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz --max-depth 2 --ascii-tree
+```
+
+```
+wget
+|-- libc6
+|   `-- libgcc-s1
+|-- libidn2-0
+|   |-- libc6 (повтор)
+|   `-- libunistring5
+|-- libpcre2-8-0
+|   `-- libc6 (повтор)
+|-- libpsl5t64
+|   |-- libidn2-0 (повтор)
+|   |-- libc6 (повтор)
+|   `-- libunistring5
+|-- libssl3t64
+|   `-- libc6 (повтор)
+|-- libuuid1
+|   `-- libc6 (повтор)
+`-- zlib1g
+    `-- libc6 (повтор)
+digraph "wget" {
+  rankdir=LR;
+  node [shape=box];
+  "wget" [style=filled, fillcolor=lightblue];
+  "libgcc-s1" [style=dashed];
+  "libunistring5" [style=dashed];
+  "wget" -> "libc6";
+  "wget" -> "libidn2-0";
+  "wget" -> "libpcre2-8-0";
+  "wget" -> "libpsl5t64";
+  "wget" -> "libssl3t64";
+  "wget" -> "libuuid1";
+  "wget" -> "zlib1g";
+  "libc6" -> "libgcc-s1";
+  "libidn2-0" -> "libc6";
+  "libidn2-0" -> "libunistring5";
+  "libpcre2-8-0" -> "libc6";
+  "libpsl5t64" -> "libidn2-0";
+  "libpsl5t64" -> "libc6";
+  "libpsl5t64" -> "libunistring5";
+  "libssl3t64" -> "libc6";
+  "libuuid1" -> "libc6";
+  "zlib1g" -> "libc6";
+}
+```
+
+Пакет `curl`:
+
+```
+python src/main.py --package curl --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz --max-depth 2 --ascii-tree
+```
+
+```
+curl
+|-- libc6
+|   `-- libgcc-s1
+|-- libcurl4t64
+|   |-- libbrotli1
+|   |-- libc6 (повтор)
+|   |-- libgssapi-krb5-2
+|   |-- libidn2-0
+|   |-- libldap2
+|   |-- libnghttp2-14
+|   |-- libpsl5t64
+|   |-- librtmp1
+|   |-- libssh-4
+|   |-- libssl3t64
+|   |-- libzstd1
+|   `-- zlib1g
+|       `-- libc6 (повтор)
+`-- zlib1g (повтор)
+digraph "curl" {
+  rankdir=LR;
+  node [shape=box];
+  "curl" [style=filled, fillcolor=lightblue];
+  "libgcc-s1" [style=dashed];
+  "libbrotli1" [style=dashed];
+  "libgssapi-krb5-2" [style=dashed];
+  "libidn2-0" [style=dashed];
+  "libldap2" [style=dashed];
+  "libnghttp2-14" [style=dashed];
+  "libpsl5t64" [style=dashed];
+  "librtmp1" [style=dashed];
+  "libssh-4" [style=dashed];
+  "libssl3t64" [style=dashed];
+  "libzstd1" [style=dashed];
+  "curl" -> "libc6";
+  "curl" -> "libcurl4t64";
+  "curl" -> "zlib1g";
+  "libc6" -> "libgcc-s1";
+  "libcurl4t64" -> "libbrotli1";
+  "libcurl4t64" -> "libc6";
+  "libcurl4t64" -> "libgssapi-krb5-2";
+  "libcurl4t64" -> "libidn2-0";
+  "libcurl4t64" -> "libldap2";
+  "libcurl4t64" -> "libnghttp2-14";
+  "libcurl4t64" -> "libpsl5t64";
+  "libcurl4t64" -> "librtmp1";
+  "libcurl4t64" -> "libssh-4";
+  "libcurl4t64" -> "libssl3t64";
+  "libcurl4t64" -> "libzstd1";
+  "libcurl4t64" -> "zlib1g";
+  "zlib1g" -> "libc6";
+}
+```
+
+Порядок загрузки (режим из этапа 4):
 
 ```
 python src/main.py --package A --repo examples/diamond.txt --repo-mode test --load-order
@@ -131,84 +359,6 @@ python src/main.py --package A --repo examples/diamond.txt --repo-mode test --lo
   3. C
   4. A
 Циклические зависимости: нет
-```
-
-Цикл (порядок строится, цикл выводится отдельно):
-
-```
-python src/main.py --package A --repo examples/cycle.txt --repo-mode test --load-order
-```
-
-```
-Порядок загрузки пакета A (зависимости раньше зависимых):
-  1. D
-  2. C
-  3. B
-  4. A
-Зависимости не раскрыты (глубина): D
-Циклические зависимости:
-  A -> B -> C -> A
-```
-
-Более сложный граф без циклов:
-
-```
-python src/main.py --package A --repo examples/big.txt --repo-mode test --max-depth 10 --load-order
-```
-
-```
-Порядок загрузки пакета A (зависимости раньше зависимых):
-  1. I
-  2. G
-  3. D
-  4. H
-  5. E
-  6. B
-  7. F
-  8. C
-  9. A
-Циклические зависимости: нет
-```
-
-Настоящий репозиторий, пакет `nano`:
-
-```
-python src/main.py --package nano --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz --max-depth 20 --load-order
-```
-
-```
-Порядок загрузки пакета nano (зависимости раньше зависимых):
-  1. gcc-14-base
-  2. libgcc-s1
-  3. libc6
-  4. libtinfo6
-  5. libncursesw6
-  6. nano
-Циклические зависимости:
-  libc6 -> libgcc-s1 -> libc6
-```
-
-Настоящий репозиторий, пакет `wget`:
-
-```
-python src/main.py --package wget --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz --max-depth 20 --load-order
-```
-
-```
-Порядок загрузки пакета wget (зависимости раньше зависимых):
-  1. gcc-14-base
-  2. libgcc-s1
-  3. libc6
-  4. libunistring5
-  5. libidn2-0
-  6. libpcre2-8-0
-  7. libpsl5t64
-  8. libssl3t64
-  9. libuuid1
-  10. zlib1g
-  11. wget
-Циклические зависимости:
-  libc6 -> libgcc-s1 -> libc6
 ```
 
 ### Сравнение порядка загрузки с настоящим менеджером пакетов
@@ -252,3 +402,38 @@ apt-get -s -o Dir::State::status=/dev/null -o APT::Install-Recommends=false inst
    `a | b`, а `apt` выбирает подходящую по версиям, приоритетам и тому, что
    уже установлено. На непустой системе `apt` пропускает установленные
    пакеты.
+
+### Сравнение со штатными средствами
+
+Для проверки использованы `apt-cache depends --recurse` и `apt-cache dotty`
+(на Ubuntu 24.04 перед запуском выполните `sudo apt update`):
+
+```
+apt-cache depends --recurse --no-recommends --no-suggests --no-conflicts --no-breaks --no-replaces --no-enhances wget
+apt-cache dotty wget | dot -Tpng -o apt-wget.png
+```
+
+Сравнение для индекса `noble/main` (граф без ограничения глубины):
+
+| Пакет | Узлов у нас | Узлов `depends --recurse` | Рёбер у нас | Рёбер `dotty` (Depends и Pre-Depends) |
+|---|---|---|---|---|
+| `nano` | 6 | 6 | 9 | 9 |
+| `wget` | 11 | 11 | 20 | 20 |
+| `curl` | 36 | 36 (из них 4 виртуальных) | 81 | 81 |
+
+Расхождения и их причины:
+
+1. **Виртуальные пакеты.** `apt-cache` показывает виртуальные пакеты в
+   угловых скобках (`<libssl3>`), мы - как обычные имена: в Ubuntu 24.04 имя
+   `libssl3` виртуальное, его предоставляет `libssl3t64` (`Provides`). Поэтому
+   у `curl` совпадают числа узлов, но четыре имени записаны по-разному.
+2. **Другие виды связей.** `apt-cache dotty` рисует не только `Depends` и
+   `Pre-Depends`, но и `Conflicts`, `Breaks`, `Replaces`, `Suggests`
+   (зелёные рёбра и шестиугольники). Поэтому его картинка намного больше:
+   для `nano` 27 узлов и 30 рёбер вместо наших 6 и 9. Если оставить только
+   обычные рёбра, графы совпадают.
+3. **Цикл.** Связь `libc6` <-> `libgcc-s1` у нас красная, а `dotty` рисует её
+   как обычные стрелки в обе стороны.
+4. **Оформление.** Фигуры, цвета и раскладка отличаются, потому что это
+   разные генераторы DOT: у нас горизонтальная раскладка (`rankdir=LR`),
+   корень закрашен.

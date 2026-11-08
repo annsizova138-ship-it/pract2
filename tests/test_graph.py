@@ -3,6 +3,7 @@ import contextlib
 import io
 import os
 import unittest
+from unittest import mock
 
 from errors import GraphError
 from file_repo import load_test_repository
@@ -81,35 +82,36 @@ class GraphTests(unittest.TestCase):
 
 
 class MainTests(unittest.TestCase):
-    """Проверки main в тестовом режиме."""
+    """Проверки main в тестовом режиме (картинка не создаётся)."""
 
     def run_main(self, name, package, *extra):
-        """Запускает main и возвращает (код, stdout)."""
+        """Запускает main и возвращает (код, stdout, stderr)."""
         argv = ["--package", package, "--repo-mode", "test",
                 "--repo", os.path.join(EXAMPLES, name), *extra]
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out), \
-                contextlib.redirect_stderr(io.StringIO()):
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch("main.show_image"), \
+                contextlib.redirect_stdout(out), \
+                contextlib.redirect_stderr(err):
             code = main(argv)
-        return code, out.getvalue()
+        return code, out.getvalue(), err.getvalue()
 
     def test_diamond(self):
-        """Вывод графа-ромба."""
-        code, text = self.run_main("diamond.txt", "A")
+        """Граф-ромб выводится в формате DOT."""
+        code, text, _ = self.run_main("diamond.txt", "A")
         self.assertEqual(code, EXIT_OK)
-        self.assertIn("  A -> B, C\n", text)
-        self.assertIn("  D -> (нет зависимостей)\n", text)
-        self.assertIn("Циклические зависимости: нет", text)
+        for edge in ('"A" -> "B";', '"A" -> "C";', '"B" -> "D";',
+                     '"C" -> "D";'):
+            self.assertIn(edge, text)
 
     def test_cycle_reported(self):
-        """Цикл попадает в вывод."""
-        code, text = self.run_main("cycle.txt", "A")
+        """Цикл попадает в сообщение для пользователя."""
+        code, _, err = self.run_main("cycle.txt", "A")
         self.assertEqual(code, EXIT_OK)
-        self.assertIn("  A -> B -> C -> A", text)
+        self.assertIn("A -> B -> C -> A", err)
 
     def test_unknown_package(self):
         """Неизвестный пакет: код ошибки 1."""
-        code, _ = self.run_main("diamond.txt", "Z")
+        code, _, _ = self.run_main("diamond.txt", "Z")
         self.assertEqual(code, EXIT_ERROR)
 
 
