@@ -4,7 +4,8 @@ import sys
 from config import parse_args
 from errors import ConfigError, DepGraphError
 from graph import build_graph, find_cycles
-from render import format_graph
+from order import load_order
+from render import format_graph, format_order
 from repository import load_repository
 
 EXIT_OK = 0
@@ -13,12 +14,17 @@ EXIT_USAGE = 2
 
 
 def run(config):
-    """Выполняет работу этапа 3: строит и выводит граф зависимостей."""
+    """Строит граф; выводит его рёбра или порядок загрузки."""
     print(f"Источник: {config.repo}", file=sys.stderr)
     repo = load_repository(config)
     graph = build_graph(
         repo, config.package, config.max_depth, config.filter_substring)
-    for line in format_graph(graph, find_cycles(graph)):
+    cycles = find_cycles(graph)
+    if config.load_order:
+        lines = format_order(graph, load_order(graph), cycles)
+    else:
+        lines = format_graph(graph, cycles)
+    for line in lines:
         print(line)
 
 

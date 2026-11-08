@@ -1,8 +1,8 @@
 @echo off
 cd /d "%~dp0.."
-chcp 65001 >nul
-echo === ĞŸĞ°ĞºĞµÑ‚ curl, Ğ³Ğ»ÑƒĞ±Ğ¸Ğ½Ğ° 1 ===
+chcp 866 >nul
+echo ===  ª¥â curl, £«ã¡¨­  1 ===
 python src\main.py --package curl --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz --max-depth 1
-echo === ĞŸĞ°ĞºĞµÑ‚ curl, Ğ³Ğ»ÑƒĞ±Ğ¸Ğ½Ğ° 2, Ñ„Ğ¸Ğ»ÑŒÑ‚Ñ€ libc ===
+echo ===  ª¥â curl, £«ã¡¨­  2, ä¨«ìâà libc ===
 python src\main.py --package curl --repo http://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz --max-depth 2 --filter libc
 pause

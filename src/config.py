@@ -33,6 +33,7 @@ class Config:
     ascii_tree: bool
     max_depth: int
     filter_substring: str
+    load_order: bool = False
 
 
 def translate_error(message):
@@ -86,6 +87,9 @@ def build_parser():
     parser.add_argument(
         "--filter", default="", metavar="ПОДСТРОКА",
         help="не учитывать пакеты, в имени которых есть эта подстрока")
+    parser.add_argument(
+        "--load-order", action="store_true",
+        help="вывести порядок загрузки зависимостей пакета")
     return parser
 
 
@@ -151,4 +155,4 @@ def parse_args(argv=None):
     return Config(
         package=args.package, repo=args.repo, repo_mode=mode,
         ascii_tree=args.ascii_tree, max_depth=parse_depth(args.max_depth),
-        filter_substring=args.filter)
+        filter_substring=args.filter, load_order=args.load_order)

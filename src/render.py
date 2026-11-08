@@ -23,3 +23,17 @@ def format_graph(graph, cycles):
                      + ", ".join(boundary))
     lines.extend(format_cycles(cycles))
     return lines
+
+
+def format_order(graph, order, cycles):
+    """Возвращает строки: порядок загрузки, граница глубины, циклы."""
+    lines = [f"Порядок загрузки пакета {graph.root} "
+             "(зависимости раньше зависимых):"]
+    for number, name in enumerate(order, start=1):
+        lines.append(f"  {number}. {name}")
+    boundary = graph.unexpanded()
+    if boundary:
+        lines.append("Зависимости не раскрыты (глубина): "
+                     + ", ".join(boundary))
+    lines.extend(format_cycles(cycles))
+    return lines
