@@ -2,6 +2,8 @@
 import contextlib
 import functools
 import http.server
+import os
+import tempfile
 import threading
 
 SAMPLE_INDEX = """Package: curl
@@ -27,22 +29,11 @@ Depends: libc6, libc6 (>= 2), libfoo [amd64] | libbar
 """
 
 
-class _Handler(http.server.BaseHTTPRequestHandler):
-    """Отдаёт заранее заданные байты или 404."""
+INDEX_FILES = ("Packages", "Packages.gz")
 
-    def __init__(self, body, *args, **kwargs):
-        """Запоминает тело ответа."""
-        self.body = body
-        super().__init__(*args, **kwargs)
 
-    def do_GET(self):
-        """Отвечает на GET: /Packages - данные, остальное - 404."""
-        if self.path.startswith("/Packages"):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(self.body)
-        else:
-            self.send_error(404)
+class QuietHandler(http.server.SimpleHTTPRequestHandler):
+    """Отдаёт файлы из заданной папки и не печатает журнал запросов."""
 
     def log_message(self, *_args):
         """Не печатает журнал запросов."""
@@ -50,13 +41,21 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
 @contextlib.contextmanager
 def serve(body):
-    """Запускает локальный сервер и отдаёт его базовый URL."""
-    handler = functools.partial(_Handler, body)
-    server = http.server.HTTPServer(("127.0.0.1", 0), handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield f"http://127.0.0.1:{server.server_port}"
-    finally:
-        server.shutdown()
-        server.server_close()
+    """Запускает локальный сервер и отдаёт его базовый URL.
+
+    Файлы Packages и Packages.gz содержат body, любой другой адрес
+    сервер не найдёт и ответит 404.
+    """
+    with tempfile.TemporaryDirectory() as folder:
+        for name in INDEX_FILES:
+            with open(os.path.join(folder, name), "wb") as handle:
+                handle.write(body)
+        handler = functools.partial(QuietHandler, directory=folder)
+        server = http.server.HTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield f"http://127.0.0.1:{server.server_port}"
+        finally:
+            server.shutdown()
+            server.server_close()
